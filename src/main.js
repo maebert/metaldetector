@@ -215,7 +215,7 @@ function startGame() {
 function drawVignette(radius) {
   // Center on the hero's head in screen coordinates
   const cx = CONFIG.SCREEN_WIDTH * CONFIG.CAMERA_OFFSET_X + CONFIG.PLAYER_WIDTH / 2 + 120;
-  const cy = CONFIG.SCREEN_HEIGHT * 0.5 - CONFIG.PLAYER_HEIGHT * 0.3 + 60;
+  const cy = CONFIG.SCREEN_HEIGHT * 0.5 - CONFIG.PLAYER_HEIGHT * 0.3 + 90;
   const PAD = 2000;
 
   vignette.clear()

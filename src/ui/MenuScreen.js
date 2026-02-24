@@ -57,7 +57,7 @@ export class MenuScreen {
     this.container.addChild(startText);
 
     const controls = new Text({
-      text: 'Arrow keys / WASD to move  |  Space to jump',
+      text: 'A game by Ezra Tarr',
       style: {
         fontFamily: 'monospace',
         fontSize: 14,
