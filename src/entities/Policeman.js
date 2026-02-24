@@ -17,7 +17,8 @@ export class Policeman {
     this.isGrounded = false;
     this.groundedPlatform = null;
 
-    this.delayTimer = 0;
+    this.activateTimer = 0;
+    this.activated = false;
     this.active = false;
 
     this.animations = animations;
@@ -39,7 +40,7 @@ export class Policeman {
     this.sprite = new Sprite(animations.running.frames[0]);
     this.sprite.anchor.set(0.5, 1.0);
     this.sprite.scale.set(this.scaleByAnim.running);
-    this.sprite.position.set(this.width / 2, this.height);
+    this.sprite.position.set(this.width / 2, this.height + 5);
     this.container.addChild(this.sprite);
 
     this.container.position.set(this.x, this.y);
@@ -50,11 +51,17 @@ export class Policeman {
     return this.container;
   }
 
+  activate() {
+    this.activated = true;
+    this.activateTimer = 0;
+  }
+
   update(dt, platforms, player) {
-    // Startup delay
+    // Wait for activation, then delay before appearing
+    if (!this.activated) return;
     if (!this.active) {
-      this.delayTimer += dt;
-      if (this.delayTimer < CONFIG.POLICEMAN_DELAY) return;
+      this.activateTimer += dt;
+      if (this.activateTimer < CONFIG.POLICEMAN_DELAY) return;
       this.active = true;
       this.container.visible = true;
     }

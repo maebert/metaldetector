@@ -1,6 +1,6 @@
-import { Application, Assets, Container } from 'pixi.js';
+import { Application, Assets, Container, Text } from 'pixi.js';
 import { CONFIG } from './config.js';
-import { initInput, isPressed, isTap, showTouchControls, hideTouchControls } from './input.js';
+import { initInput, isPressed, isTap, isLeft, isRight, isJump, showTouchControls, hideTouchControls } from './input.js';
 import { Player } from './entities/Player.js';
 import { Policeman } from './entities/Policeman.js';
 import { generateLevel } from './level/LevelGenerator.js';
@@ -12,9 +12,17 @@ import { GameOverScreen } from './ui/GameOverScreen.js';
 import { MenuScreen } from './ui/MenuScreen.js';
 import { extractFrames } from './SpriteAnimation.js';
 
-const State = { MENU: 0, PLAYING: 1, ARREST: 2, WIN: 3, LOSE: 4 };
-const ARREST_DURATION = 90; // 1.5 seconds at 60fps
+import { Graphics } from 'pixi.js';
+
+const State = { MENU: 0, INTRO: 1, PLAYING: 2, ARREST: 3, CELEBRATION: 4, WIN: 5, LOSE: 6 };
+const ARREST_DURATION = 90;
 const ARREST_ZOOM = 5;
+const CELEBRATION_DURATION = 90;
+const CELEBRATION_ZOOM = 5;
+const INTRO_REVEAL = 30;    // 0.5s: black → aperture open
+const INTRO_HOLD = 30;      // 0.5s: hold at aperture
+const INTRO_OPEN = 30;      // 0.5s: open all the way + zoom out
+const INTRO_ZOOM = 8;
 
 let app;
 let worldContainer;
@@ -32,6 +40,10 @@ let playerAnimations;
 let policeAnimations;
 let metalAnimation;
 let arrestTimer;
+let celebrationTimer;
+let introTimer;
+let vignette;
+let playerHasMoved;
 
 async function init() {
   app = new Application();
@@ -59,10 +71,11 @@ async function init() {
   initInput();
 
   // Preload sprite sheets
-  const [standingTex, runningTex, jumpingTex, policeRunTex, policeJumpTex, policeArrestTex, metalTex, platformTex, iconTex, titleTex] = await Promise.all([
+  const [standingTex, runningTex, jumpingTex, winningTex, policeRunTex, policeJumpTex, policeArrestTex, metalTex, platformTex, iconTex, titleTex] = await Promise.all([
     Assets.load('/assets/hero-standing.png'),
     Assets.load('/assets/hero-running.png'),
     Assets.load('/assets/hero-jumping.png'),
+    Assets.load('/assets/hero-winning.png'),
     Assets.load('/assets/police-running.png'),
     Assets.load('/assets/police-jumping.png'),
     Assets.load('/assets/police-arrest.png'),
@@ -76,7 +89,8 @@ async function init() {
   playerAnimations = {
     standing: extractFrames(standingTex, 6, 6, 36),
     running: extractFrames(runningTex, 6, 6, 36),
-    jumping: extractFrames(jumpingTex, 4, 4, 16),
+    jumping: extractFrames(jumpingTex, 5, 5, 25),
+    winning: extractFrames(winningTex, 6, 6, 36),
   };
   policeAnimations = {
     running: extractFrames(policeRunTex, 6, 6, 36),
@@ -90,19 +104,50 @@ async function init() {
   gameOverScreen = new GameOverScreen();
   menuScreen = new MenuScreen(iconTex, titleTex);
 
+  // FPS counter (toggle with Y key)
+  const fpsText = new Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 16, fill: 0x00ff00 },
+  });
+  fpsText.anchor.set(1, 0);
+  fpsText.position.set(CONFIG.SCREEN_WIDTH - 8, 8);
+  fpsText.visible = false;
+  let fpsVisible = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyY') {
+      fpsVisible = !fpsVisible;
+      fpsText.visible = fpsVisible;
+    }
+  });
+
   showMenu();
 
   app.ticker.add((ticker) => {
     const dt = ticker.deltaTime;
+
+    if (fpsVisible) {
+      fpsText.text = `${Math.round(ticker.FPS)} fps`;
+      // Keep FPS on top
+      const stage = app.stage;
+      if (fpsText.parent !== stage) stage.addChild(fpsText);
+      else stage.setChildIndex(fpsText, stage.children.length - 1);
+    }
+
     switch (state) {
       case State.MENU:
         updateMenu();
+        break;
+      case State.INTRO:
+        updateIntro(dt);
         break;
       case State.PLAYING:
         updatePlaying(dt);
         break;
       case State.ARREST:
         updateArrest(dt);
+        break;
+      case State.CELEBRATION:
+        updateCelebration(dt);
         break;
       case State.WIN:
       case State.LOSE:
@@ -123,9 +168,10 @@ function showMenu() {
 }
 
 function startGame() {
-  state = State.PLAYING;
+  state = State.INTRO;
   collected = 0;
-  showTouchControls();
+  introTimer = 0;
+  playerHasMoved = false;
 
   // Clear stage
   app.stage.removeChildren();
@@ -143,12 +189,20 @@ function startGame() {
   player = new Player(level.startPosition.x, level.startPosition.y, playerAnimations);
   worldContainer.addChild(player.graphics);
 
-  // Create policeman at same start position
+  // Create policeman at same start position (hidden until player moves)
   policeman = new Policeman(level.startPosition.x, level.startPosition.y, policeAnimations);
   worldContainer.addChild(policeman.graphics);
 
   // Systems
   camera = new Camera();
+  camera.zoom = INTRO_ZOOM;
+  camera.targetZoom = INTRO_ZOOM;
+  camera.snapTo(player);
+
+  // Vignette overlay: dark screen with a circular cutout
+  vignette = new Graphics();
+  app.stage.addChild(vignette);
+  drawVignette(0);
 
   // UI (on app.stage, not worldContainer)
   app.stage.addChild(hud.text);
@@ -158,9 +212,57 @@ function startGame() {
   app.stage.addChild(gameOverScreen.container);
 }
 
+function drawVignette(radius) {
+  // Center on the hero's head in screen coordinates
+  const cx = CONFIG.SCREEN_WIDTH * CONFIG.CAMERA_OFFSET_X + CONFIG.PLAYER_WIDTH / 2 + 120;
+  const cy = CONFIG.SCREEN_HEIGHT * 0.5 - CONFIG.PLAYER_HEIGHT * 0.3 + 60;
+  const PAD = 2000;
+
+  vignette.clear()
+    .rect(-PAD, -PAD, CONFIG.SCREEN_WIDTH + PAD * 2, CONFIG.SCREEN_HEIGHT + PAD * 2)
+    .fill(0x000000)
+    .circle(cx, cy, radius)
+    .cut();
+}
+
 function updateMenu() {
   if (isPressed('Enter') || isTap()) {
     startGame();
+  }
+}
+
+function updateIntro(dt) {
+  introTimer += dt;
+
+  camera.update(player, worldContainer, dt);
+
+  const t1 = INTRO_REVEAL;
+  const t2 = t1 + INTRO_HOLD;
+  const t3 = t2 + INTRO_OPEN;
+
+  if (introTimer < t1) {
+    // Phase 1: open from black to aperture (0 → 80)
+    const p = introTimer / t1;
+    const eased = p * p * (3 - 2 * p);
+    drawVignette(eased * 80);
+  } else if (introTimer < t2) {
+    // Phase 2: hold at aperture
+    drawVignette(80);
+  } else if (introTimer < t3) {
+    // Phase 3: open all the way + zoom out
+    camera.targetZoom = CONFIG.CAMERA_ZOOM;
+    camera.zoomLerp = 0.08;
+
+    const p = (introTimer - t2) / INTRO_OPEN;
+    const eased = p * p * (3 - 2 * p);
+    const maxRadius = Math.max(CONFIG.SCREEN_WIDTH, CONFIG.SCREEN_HEIGHT);
+    drawVignette(80 + eased * maxRadius);
+  } else {
+    // Intro complete
+    state = State.PLAYING;
+    showTouchControls();
+    if (vignette.parent) vignette.parent.removeChild(vignette);
+    camera.zoomLerp = CONFIG.CAMERA_LERP;
   }
 }
 
@@ -178,8 +280,21 @@ function updatePlaying(dt) {
     player.y += player.groundedPlatform.y - prevY;
   }
 
-  // Policeman AI
+  // Detect first player movement to activate policeman
+  if (!playerHasMoved && (isLeft() || isRight() || isJump())) {
+    playerHasMoved = true;
+    policeman.activate();
+  }
+
+  // Policeman AI (only runs after activation)
   policeman.update(dt, platforms, player);
+
+  // Carry policeman with sinking platform
+  if (policeman.groundedPlatform) {
+    const prevY = policeman.groundedPlatform.y;
+    policeman.groundedPlatform.sink(dt);
+    policeman.y += policeman.groundedPlatform.y - prevY;
+  }
 
   // Metal piece collection
   for (const metal of metalPieces) {
@@ -190,7 +305,7 @@ function updatePlaying(dt) {
       hud.update(collected, metalPieces.length);
 
       if (collected >= metalPieces.length) {
-        endGame(State.WIN);
+        startCelebration();
         return;
       }
     }
@@ -210,30 +325,80 @@ function updatePlaying(dt) {
   }
 
   // Camera
-  camera.update(player, worldContainer);
+  camera.update(player, worldContainer, dt);
+}
+
+function startCelebration() {
+  state = State.CELEBRATION;
+  celebrationTimer = 0;
+  player.velocityX = 0;
+}
+
+function updateCelebration(dt) {
+  if (!player.isGrounded) {
+    // Keep falling until we land
+    applyGravity(player, dt);
+    resolveCollisions(player, platforms);
+    player.graphics.position.set(player.x, player.y);
+    camera.update(player, worldContainer, dt);
+    return;
+  }
+
+  // Start celebration animation + zoom on first grounded frame
+  if (celebrationTimer === 0) {
+    player.playCelebration();
+    camera.zoomTo(CELEBRATION_ZOOM, { x: player.x, y: player.y }, 0.03);
+  }
+
+  celebrationTimer += dt;
+
+  player.updateCelebration(dt);
+  player.graphics.position.set(player.x, player.y);
+
+  camera.update(player, worldContainer, dt);
+
+  if (celebrationTimer >= CELEBRATION_DURATION) {
+    endGame(State.WIN);
+  }
 }
 
 function startArrest() {
   state = State.ARREST;
   arrestTimer = 0;
-
-  // Switch policeman to arrest animation
-  policeman.playArrest();
-
-  // Zoom camera toward midpoint between player and policeman
-  const midX = (player.x + policeman.x) / 2;
-  const midY = (player.y + policeman.y) / 2;
-  camera.zoomTo(ARREST_ZOOM, { x: midX, y: midY }, 0.03);
+  player.velocityX = 0;
+  policeman.velocityX = 0;
 }
 
 function updateArrest(dt) {
+  // Wait for both to land
+  if (!player.isGrounded || !policeman.isGrounded) {
+    if (!player.isGrounded) {
+      applyGravity(player, dt);
+      resolveCollisions(player, platforms);
+      player.graphics.position.set(player.x, player.y);
+    }
+    if (!policeman.isGrounded) {
+      applyGravity(policeman, dt);
+      resolveCollisions(policeman, platforms);
+      policeman.container.position.set(policeman.x, policeman.y);
+    }
+    camera.update(player, worldContainer, dt);
+    return;
+  }
+
+  // Start arrest animation + zoom on first grounded frame
+  if (arrestTimer === 0) {
+    policeman.playArrest();
+    const midX = (player.x + policeman.x) / 2;
+    const midY = (player.y + policeman.y) / 2;
+    camera.zoomTo(ARREST_ZOOM, { x: midX, y: midY }, 0.03);
+  }
+
   arrestTimer += dt;
 
-  // Keep animating the policeman arrest
   policeman.updateArrest(dt);
 
-  // Keep updating camera (smooth zoom-in)
-  camera.update(player, worldContainer);
+  camera.update(player, worldContainer, dt);
 
   if (arrestTimer >= ARREST_DURATION) {
     endGame(State.LOSE);

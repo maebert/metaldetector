@@ -30,7 +30,10 @@ export class Player {
     this.scaleByAnim = {
       standing: CONFIG.PLAYER_HEIGHT / animations.standing.frameHeight,
       running: CONFIG.PLAYER_HEIGHT / animations.running.frameHeight,
-      jumping: (CONFIG.PLAYER_HEIGHT / animations.jumping.frameHeight) * 1.2,
+      jumping: (CONFIG.PLAYER_HEIGHT / animations.jumping.frameHeight) * 1.25,
+      winning: animations.winning
+        ? CONFIG.PLAYER_HEIGHT / animations.winning.frameHeight
+        : 0,
     };
     this.currentScale = this.scaleByAnim.standing;
 
@@ -41,7 +44,7 @@ export class Player {
     this.sprite = new Sprite(animations.standing.frames[0]);
     this.sprite.anchor.set(0.5, 1.0);
     this.sprite.scale.set(this.currentScale);
-    this.sprite.position.set(this.width / 2, this.height);
+    this.sprite.position.set(this.width / 2, this.height + 5);
     this.container.addChild(this.sprite);
 
     this.container.position.set(this.x, this.y);
@@ -111,5 +114,31 @@ export class Player {
 
     // Sync container position
     this.container.position.set(this.x, this.y);
+  }
+
+  playCelebration() {
+    this.state = 'winning';
+    this.animFrame = 0;
+    this.animTimer = 0;
+  }
+
+  updateCelebration(dt) {
+    const anim = this.animations.winning;
+    if (!anim) return;
+
+    this.animTimer += dt;
+    const ticksPerFrame = TICKS_PER_FRAME.standing;
+    while (this.animTimer >= ticksPerFrame) {
+      this.animTimer -= ticksPerFrame;
+      this.animFrame = (this.animFrame + 1) % anim.frames.length;
+    }
+
+    const s = this.scaleByAnim.winning;
+    this.sprite.texture = anim.frames[this.animFrame];
+    this.sprite.scale.set(
+      s * (this.facingRight ? 1 : -1),
+      s
+    );
+    this.sprite.position.set(this.width / 2, this.height + 10);
   }
 }
