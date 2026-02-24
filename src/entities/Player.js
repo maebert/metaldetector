@@ -4,9 +4,9 @@ import * as Input from '../input.js';
 
 // Game ticks between animation frames, per state
 const TICKS_PER_FRAME = {
-  standing: 60 / 12,  // 12 FPS
-  running: 60 / 24,   // 24 FPS
-  jumping: 60 / 12,   // 12 FPS
+  standing: 60 / 24,
+  running: 60 / 24,
+  jumping: 60 / 24,
 };
 
 export class Player {

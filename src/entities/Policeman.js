@@ -1,8 +1,7 @@
 import { Container, Sprite } from 'pixi.js';
 import { CONFIG } from '../config.js';
 
-const ANIM_FPS = 12;
-const TICKS_PER_FRAME = 60 / ANIM_FPS;
+const TICKS_PER_FRAME = 60 / 24;
 
 export class Policeman {
   constructor(x, y, animations) {
@@ -19,10 +18,10 @@ export class Policeman {
     this.animTimer = 0;
     this.facingRight = true;
 
-    // Per-animation scale to match POLICEMAN_HEIGHT
+    // Per-animation scale to match POLICEMAN_HEIGHT, +20% bigger
     this.scaleByAnim = {
-      running: CONFIG.POLICEMAN_HEIGHT / animations.running.frameHeight,
-      jumping: CONFIG.POLICEMAN_HEIGHT / animations.jumping.frameHeight,
+      running: (CONFIG.POLICEMAN_HEIGHT / animations.running.frameHeight) * 1.2,
+      jumping: (CONFIG.POLICEMAN_HEIGHT / animations.jumping.frameHeight) * 1.2,
     };
 
     // Container + Sprite

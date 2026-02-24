@@ -18,13 +18,13 @@ export class MetalPiece {
     this.animFrame = Math.floor(Math.random() * animation.frames.length);
     this.animTimer = 0;
 
-    const scale = CONFIG.METAL_HEIGHT / animation.frameHeight;
+    const scale = (CONFIG.METAL_HEIGHT / animation.frameHeight) * 1.6;
     this.spriteScale = scale;
 
     this.graphics = new Sprite(animation.frames[this.animFrame]);
     this.graphics.anchor.set(0.5, 1.0);
     this.graphics.scale.set(scale);
-    this.graphics.position.set(this.x + this.width / 2, this.y + this.height);
+    this.graphics.position.set(this.x + this.width / 2, this.y + this.height - 6);
   }
 
   update(dt) {
@@ -40,6 +40,6 @@ export class MetalPiece {
 
     // Subtle bob
     this.bobTime += 0.05 * dt;
-    this.graphics.position.y = this.baseY + this.height + Math.sin(this.bobTime) * 3;
+    this.graphics.position.y = this.baseY + this.height - 6 + Math.sin(this.bobTime) * 3;
   }
 }
