@@ -2,8 +2,8 @@ import { CONFIG } from '../config.js';
 import { Platform } from './Platform.js';
 import { MetalPiece } from '../entities/MetalPiece.js';
 
-const MAX_JUMP_HEIGHT = 100;
-const MAX_HORIZONTAL = 160;
+const MAX_JUMP_HEIGHT = 50;
+const MAX_HORIZONTAL = 100;
 const MAX_FALL = 300;
 
 function findReachableY(newX, newWidth, platforms) {
@@ -31,7 +31,7 @@ export function generateLevel(worldContainer, metalAnimation) {
   const metalPieces = [];
 
   // Ground platform
-  const ground = new Platform(0, CONFIG.GROUND_Y, CONFIG.WORLD_WIDTH, CONFIG.GROUND_HEIGHT);
+  const ground = new Platform(0, CONFIG.GROUND_Y, CONFIG.WORLD_WIDTH, CONFIG.GROUND_HEIGHT, false);
   platforms.push(ground);
   worldContainer.addChild(ground.graphics);
 
@@ -61,7 +61,7 @@ export function generateLevel(worldContainer, metalAnimation) {
 
     // Fallback: place at reachable height near ground
     if (!placed) {
-      const plat = new Platform(colX + 20, CONFIG.GROUND_Y - 80, 120);
+      const plat = new Platform(colX + 20, CONFIG.GROUND_Y - 40, 120);
       platforms.push(plat);
       worldContainer.addChild(plat.graphics);
     }

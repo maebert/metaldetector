@@ -9,7 +9,10 @@ export class BreadcrumbTrail {
   record(player) {
     this.frameCount++;
     if (this.frameCount % CONFIG.BREADCRUMB_RECORD_INTERVAL === 0) {
-      this.trail.push({ x: player.x, y: player.y, state: player.state, facingRight: player.facingRight });
+      this.trail.push({
+        velocityX: player.velocityX,
+        jump: player.justJumped,
+      });
     }
   }
 
@@ -17,9 +20,9 @@ export class BreadcrumbTrail {
     return this.trail.length;
   }
 
-  getPosition(index) {
-    const clamped = Math.min(index, this.trail.length - 1);
-    return this.trail[Math.floor(clamped)];
+  get(index) {
+    const i = Math.min(Math.floor(index), this.trail.length - 1);
+    return this.trail[i];
   }
 
   reset() {

@@ -30,7 +30,7 @@ export class Player {
     this.scaleByAnim = {
       standing: CONFIG.PLAYER_HEIGHT / animations.standing.frameHeight,
       running: CONFIG.PLAYER_HEIGHT / animations.running.frameHeight,
-      jumping: (CONFIG.PLAYER_HEIGHT / animations.jumping.frameHeight) * 1.1,
+      jumping: (CONFIG.PLAYER_HEIGHT / animations.jumping.frameHeight) * 1.2,
     };
     this.currentScale = this.scaleByAnim.standing;
 
@@ -65,9 +65,11 @@ export class Player {
     }
 
     // Jump
+    this.justJumped = false;
     if (Input.isJump() && this.isGrounded) {
       this.velocityY = CONFIG.JUMP_FORCE;
       this.isGrounded = false;
+      this.justJumped = true;
     }
 
     // Apply horizontal movement

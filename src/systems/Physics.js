@@ -19,6 +19,7 @@ function overlaps(a, b) {
 
 export function resolveCollisions(entity, platforms) {
   entity.isGrounded = false;
+  entity.groundedPlatform = null;
 
   for (const plat of platforms) {
     if (!overlaps(entity, plat)) continue;
@@ -35,6 +36,7 @@ export function resolveCollisions(entity, platforms) {
       entity.y = plat.y - entity.height;
       entity.velocityY = 0;
       entity.isGrounded = true;
+      entity.groundedPlatform = plat;
     } else if (minOverlap === overlapBottom && entity.velocityY < 0) {
       // Hitting head
       entity.y = plat.y + plat.height;

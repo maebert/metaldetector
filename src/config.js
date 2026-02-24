@@ -8,7 +8,7 @@ export const CONFIG = Object.freeze({
   PLAYER_HEIGHT: 48,
   PLAYER_COLOR: 0x00cc44,
   PLAYER_SPEED: 4.0,
-  JUMP_FORCE: -12.0,
+  JUMP_FORCE: -10,
   GRAVITY: 0.6,
   MAX_FALL_SPEED: 15.0,
 
@@ -16,9 +16,8 @@ export const CONFIG = Object.freeze({
   POLICEMAN_WIDTH: 32,
   POLICEMAN_HEIGHT: 48,
   POLICEMAN_COLOR: 0xcc0000,
-  POLICEMAN_TRAIL_DELAY: 40,
-  POLICEMAN_SPEED_MULT: 1.0,
-  BREADCRUMB_RECORD_INTERVAL: 3,
+  POLICEMAN_DELAY: 120, // frames before policeman activates (2s at 60fps)
+  POLICEMAN_LOOK_AHEAD: 50, // pixels ahead to detect platforms
   CATCH_DISTANCE: 24,
 
   // Platforms
