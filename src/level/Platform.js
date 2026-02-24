@@ -2,9 +2,9 @@ import { Container, Graphics, Sprite, Texture, TilingSprite, Rectangle } from 'p
 import { CONFIG } from '../config.js';
 
 // Slice boundaries in the source texture
-const LEFT_W = 322;
-const MID_W = 238;
-const RIGHT_W = 290;
+const LEFT_W = 325;
+const MID_W = 326;
+const RIGHT_W = 626;
 
 let leftTex, midTex, rightTex, texScale;
 

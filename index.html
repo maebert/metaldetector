@@ -8,10 +8,22 @@
   <link rel="apple-touch-icon" href="/assets/icon.png" />
   <style>
     * { margin: 0; padding: 0; }
-    html, body { overflow: hidden; background: #000; width: 100%; height: 100%; }
+    html, body { overflow: hidden; background: #87ceeb; width: 100%; height: 100%; }
+    #loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 9999;
+      font-family: monospace; color: #333; font-size: 18px;
+    }
+    #loading .spinner {
+      width: 40px; height: 40px; margin-bottom: 16px;
+      border: 4px solid rgba(0,0,0,0.15); border-top-color: #333;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+  <div id="loading"><div class="spinner"></div>Loading...</div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

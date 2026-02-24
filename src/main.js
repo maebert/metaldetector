@@ -71,6 +71,7 @@ async function init() {
     Assets.load('/assets/icon.png'),
     Assets.load('/assets/title.png'),
   ]);
+  document.getElementById('loading')?.remove();
   initPlatformTexture(platformTex);
   playerAnimations = {
     standing: extractFrames(standingTex, 6, 6, 36),
