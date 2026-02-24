@@ -40,7 +40,7 @@ export const CONFIG = Object.freeze({
   METAL_COLOR: 0xffd700,
 
   // Camera
-  CAMERA_ZOOM: 2,
+  CAMERA_ZOOM: 3,
   CAMERA_OFFSET_X: 0.3,
   CAMERA_LERP: 0.1,
 });

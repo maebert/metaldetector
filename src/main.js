@@ -1,6 +1,6 @@
 import { Application, Assets, Container } from 'pixi.js';
 import { CONFIG } from './config.js';
-import { initInput, isPressed } from './input.js';
+import { initInput, isPressed, isTap, showTouchControls, hideTouchControls } from './input.js';
 import { Player } from './entities/Player.js';
 import { Policeman } from './entities/Policeman.js';
 import { generateLevel } from './level/LevelGenerator.js';
@@ -36,12 +36,25 @@ let arrestTimer;
 async function init() {
   app = new Application();
   await app.init({
-    width: CONFIG.SCREEN_WIDTH,
-    height: CONFIG.SCREEN_HEIGHT,
+    resizeTo: window,
     backgroundColor: 0x87ceeb,
     antialias: false,
   });
   document.body.appendChild(app.canvas);
+
+  // Scale stage to fit window while preserving 960x540 logical resolution
+  function onResize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const scale = Math.min(w / CONFIG.SCREEN_WIDTH, h / CONFIG.SCREEN_HEIGHT);
+    app.stage.scale.set(scale);
+    app.stage.position.set(
+      (w - CONFIG.SCREEN_WIDTH * scale) / 2,
+      (h - CONFIG.SCREEN_HEIGHT * scale) / 2
+    );
+  }
+  window.addEventListener('resize', onResize);
+  onResize();
 
   initInput();
 
@@ -100,6 +113,7 @@ async function init() {
 
 function showMenu() {
   state = State.MENU;
+  hideTouchControls();
 
   // Clear stage
   app.stage.removeChildren();
@@ -110,6 +124,7 @@ function showMenu() {
 function startGame() {
   state = State.PLAYING;
   collected = 0;
+  showTouchControls();
 
   // Clear stage
   app.stage.removeChildren();
@@ -143,7 +158,7 @@ function startGame() {
 }
 
 function updateMenu() {
-  if (isPressed('Enter')) {
+  if (isPressed('Enter') || isTap()) {
     startGame();
   }
 }
@@ -226,6 +241,7 @@ function updateArrest(dt) {
 
 function endGame(newState) {
   state = newState;
+  hideTouchControls();
   if (newState === State.WIN) {
     gameOverScreen.show('ALL METAL COLLECTED!');
   } else {
@@ -234,7 +250,7 @@ function endGame(newState) {
 }
 
 function updateGameOver() {
-  if (isPressed('KeyR')) {
+  if (isPressed('KeyR') || isTap()) {
     startGame();
   }
 }

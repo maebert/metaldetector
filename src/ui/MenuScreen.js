@@ -5,8 +5,9 @@ export class MenuScreen {
   constructor(iconTexture, titleTexture) {
     this.container = new Container();
 
+    const PAD = 2000;
     const bg = new Graphics()
-      .rect(0, 0, CONFIG.SCREEN_WIDTH, CONFIG.SCREEN_HEIGHT)
+      .rect(-PAD, -PAD, CONFIG.SCREEN_WIDTH + PAD * 2, CONFIG.SCREEN_HEIGHT + PAD * 2)
       .fill(0x87ceeb);
     this.container.addChild(bg);
 
@@ -43,7 +44,7 @@ export class MenuScreen {
     this.container.addChild(subtitle);
 
     const startText = new Text({
-      text: 'Press ENTER to start',
+      text: 'Tap or press ENTER to start',
       style: {
         fontFamily: 'monospace',
         fontSize: 22,

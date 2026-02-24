@@ -5,9 +5,10 @@ export class GameOverScreen {
   constructor() {
     this.container = new Container();
 
-    // Semi-transparent overlay
+    // Semi-transparent overlay — oversized to cover letterbox bars
+    const PAD = 2000;
     const overlay = new Graphics()
-      .rect(0, 0, CONFIG.SCREEN_WIDTH, CONFIG.SCREEN_HEIGHT)
+      .rect(-PAD, -PAD, CONFIG.SCREEN_WIDTH + PAD * 2, CONFIG.SCREEN_HEIGHT + PAD * 2)
       .fill({ color: 0x000000, alpha: 0.6 });
     this.container.addChild(overlay);
 
@@ -25,7 +26,7 @@ export class GameOverScreen {
     this.container.addChild(this.messageText);
 
     const restartText = new Text({
-      text: 'Press R to restart',
+      text: 'Tap or press R to restart',
       style: {
         fontFamily: 'monospace',
         fontSize: 20,
