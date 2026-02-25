@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { Platform } from './Platform.js';
 import { MetalPiece } from '../entities/MetalPiece.js';
+import { PaintBucket } from '../entities/PaintBucket.js';
 
 const MAX_JUMP_HEIGHT = 50;
 const MAX_HORIZONTAL = 100;
@@ -26,7 +27,7 @@ function findReachableY(newX, newWidth, platforms) {
   return minY + Math.random() * (maxY - minY);
 }
 
-export function generateLevel(worldContainer, metalAnimation) {
+export function generateLevel(worldContainer, metalAnimation, paintBucketAnimation) {
   const platforms = [];
   const metalPieces = [];
 
@@ -72,18 +73,28 @@ export function generateLevel(worldContainer, metalAnimation) {
   const shuffled = [...floating].sort(() => Math.random() - 0.5);
   const count = Math.min(CONFIG.METAL_COUNT, shuffled.length);
 
+  let paintBucket = null;
+
   for (let i = 0; i < count; i++) {
     const plat = shuffled[i];
     const mx = plat.x + plat.width / 2 - CONFIG.METAL_WIDTH / 2;
-    const my = plat.y - CONFIG.METAL_HEIGHT;
+    const isLast = i === count - 1;
+    // Last metal piece sits higher to make room for the paint bucket below
+    const my = isLast ? plat.y - CONFIG.METAL_HEIGHT - 20 : plat.y - CONFIG.METAL_HEIGHT;
     const metal = new MetalPiece(mx, my, metalAnimation);
     metalPieces.push(metal);
     worldContainer.addChild(metal.graphics);
+
+    if (isLast) {
+      paintBucket = new PaintBucket(mx, plat.y - 24, paintBucketAnimation);
+      worldContainer.addChild(paintBucket.graphics);
+    }
   }
 
   return {
     platforms,
     metalPieces,
+    paintBucket,
     startPosition: { x: 100, y: CONFIG.GROUND_Y - CONFIG.PLAYER_HEIGHT },
   };
 }

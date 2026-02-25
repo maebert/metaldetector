@@ -2,6 +2,8 @@ import { CONFIG } from '../config.js';
 
 const BASE_ZOOM = CONFIG.CAMERA_ZOOM;
 
+const VERTICAL_FOLLOW = 0.3; // only follow 30% of vertical movement
+
 export class Camera {
   constructor() {
     this.x = 0;
@@ -10,6 +12,7 @@ export class Camera {
     this.targetZoom = BASE_ZOOM;
     this.focusOverride = null;
     this.zoomLerp = CONFIG.CAMERA_LERP;
+    this.groundY = CONFIG.GROUND_Y - CONFIG.PLAYER_HEIGHT; // baseline Y
   }
 
   update(player, worldContainer, dt = 1) {
@@ -24,7 +27,12 @@ export class Camera {
 
     const focus = this.focusOverride || player;
     const targetX = -focus.x + viewW * (this.focusOverride ? 0.5 : CONFIG.CAMERA_OFFSET_X);
-    const targetY = -focus.y + viewH * 0.5;
+
+    // Dampen vertical follow — only track 30% of deviation from ground baseline
+    const focusY = this.focusOverride
+      ? focus.y
+      : this.groundY + (focus.y - this.groundY) * VERTICAL_FOLLOW;
+    const targetY = -focusY + viewH * 0.5;
 
     // Clamp to world bounds
     const clampedX = Math.min(0, Math.max(targetX, -(CONFIG.WORLD_WIDTH - viewW)));
@@ -42,7 +50,8 @@ export class Camera {
     const viewW = CONFIG.SCREEN_WIDTH / this.zoom;
     const viewH = CONFIG.SCREEN_HEIGHT / this.zoom;
     const targetX = -focus.x + viewW * CONFIG.CAMERA_OFFSET_X;
-    const targetY = -focus.y + viewH * 0.5;
+    const focusY = this.groundY + (focus.y - this.groundY) * VERTICAL_FOLLOW;
+    const targetY = -focusY + viewH * 0.5;
     this.x = Math.min(0, Math.max(targetX, -(CONFIG.WORLD_WIDTH - viewW)));
     this.y = Math.min(0, Math.max(targetY, -(CONFIG.WORLD_HEIGHT - viewH)));
   }

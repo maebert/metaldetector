@@ -32,7 +32,7 @@ export const CONFIG = Object.freeze({
   WORLD_WIDTH: 8000,
   WORLD_HEIGHT: 700,
   PLATFORM_COUNT: 40,
-  METAL_COUNT: 10,
+  METAL_COUNT: 3,
 
   // Metal pieces
   METAL_WIDTH: 16,

@@ -1,5 +1,5 @@
 const keys = {};
-const touch = { left: false, right: false, jump: false, tap: false };
+const touch = { left: false, right: false, jump: false, transform: false, attack: false, tap: false };
 
 let isTouchDevice = false;
 let touchButtons = [];
@@ -37,6 +37,14 @@ export function isRight() {
 
 export function isJump() {
   return isPressed('Space') || isPressed('ArrowUp') || isPressed('KeyW') || touch.jump;
+}
+
+export function isTransform() {
+  return isPressed('KeyE') || touch.transform;
+}
+
+export function isAttack() {
+  return isPressed('KeyR') || touch.attack;
 }
 
 export function isTap() {
@@ -88,6 +96,14 @@ function createTouchControls() {
   // Prevent default touch behaviors on canvas
   document.body.style.touchAction = 'none';
 
+  // Attack — bottom-left, above transform
+  const attackBtn = createButton('💥', 70, 250, 'left', 40);
+  bindTouch(attackBtn, 'attack');
+
+  // Transform — bottom-left, above jump
+  const transformBtn = createButton('⚡', 70, 140, 'left', 40);
+  bindTouch(transformBtn, 'transform');
+
   // Jump — bottom-left, bigger
   const jumpBtn = createButton('▲', 90, 30, 'left', 30);
   bindTouch(jumpBtn, 'jump');
@@ -100,9 +116,12 @@ function createTouchControls() {
   const rightBtn = createButton('▶', 70, 30, 'right', 30);
   bindTouch(rightBtn, 'right');
 
-  touchButtons = [jumpBtn, leftBtn, rightBtn];
+  touchButtons = [transformBtn, jumpBtn, leftBtn, rightBtn];
+  attackButton = attackBtn;
   hideTouchControls();
 }
+
+let attackButton = null;
 
 export function showTouchControls() {
   touchButtons.forEach((b) => { b.style.display = 'flex'; });
@@ -110,4 +129,13 @@ export function showTouchControls() {
 
 export function hideTouchControls() {
   touchButtons.forEach((b) => { b.style.display = 'none'; });
+  if (attackButton) attackButton.style.display = 'none';
+}
+
+export function showAttackButton() {
+  if (attackButton) attackButton.style.display = 'flex';
+}
+
+export function hideAttackButton() {
+  if (attackButton) attackButton.style.display = 'none';
 }

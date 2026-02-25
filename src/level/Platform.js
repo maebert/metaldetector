@@ -88,6 +88,12 @@ export class Platform {
     right.position.set(this.width - actualRightW, 0);
     container.addChild(right);
 
+    // Cache as single texture to reduce draw calls (3→1 per platform)
+    // High resolution to look crisp at camera zoom
+    if (this.sinkable) {
+      container.cacheAsTexture({ resolution: 4 });
+    }
+
     return container;
   }
 }

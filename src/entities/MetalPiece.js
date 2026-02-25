@@ -1,8 +1,7 @@
-import { Sprite } from 'pixi.js';
+import { AnimatedSprite } from 'pixi.js';
 import { CONFIG } from '../config.js';
 
-const ANIM_FPS = 12;
-const TICKS_PER_FRAME = 60 / ANIM_FPS;
+const ANIM_SPEED = 12 / 60; // 12fps relative to 60fps ticker
 
 export class MetalPiece {
   constructor(x, y, animation) {
@@ -14,29 +13,19 @@ export class MetalPiece {
     this.baseY = y;
     this.bobTime = Math.random() * Math.PI * 2;
 
-    this.animation = animation;
-    this.animFrame = Math.floor(Math.random() * animation.frames.length);
-    this.animTimer = 0;
-
     const scale = (CONFIG.METAL_HEIGHT / animation.frameHeight) * 1.6;
-    this.spriteScale = scale;
 
-    this.graphics = new Sprite(animation.frames[this.animFrame]);
+    this.graphics = new AnimatedSprite(animation.frames);
     this.graphics.anchor.set(0.5, 1.0);
     this.graphics.scale.set(scale);
     this.graphics.position.set(this.x + this.width / 2, this.y + this.height - 6);
+    this.graphics.animationSpeed = ANIM_SPEED;
+    this.graphics.loop = true;
+    this.graphics.gotoAndPlay(Math.floor(Math.random() * animation.frames.length));
   }
 
   update(dt) {
     if (this.collected) return;
-
-    // Advance animation
-    this.animTimer += dt;
-    while (this.animTimer >= TICKS_PER_FRAME) {
-      this.animTimer -= TICKS_PER_FRAME;
-      this.animFrame = (this.animFrame + 1) % this.animation.frames.length;
-    }
-    this.graphics.texture = this.animation.frames[this.animFrame];
 
     // Subtle bob
     this.bobTime += 0.05 * dt;

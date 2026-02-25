@@ -1,13 +1,9 @@
-import { Container, Sprite } from 'pixi.js';
+import { AnimatedSprite, Container } from 'pixi.js';
 import { CONFIG } from '../config.js';
 import * as Input from '../input.js';
 
-// Game ticks between animation frames, per state
-const TICKS_PER_FRAME = {
-  standing: 60 / 24,
-  running: 60 / 24,
-  jumping: 60 / 24,
-};
+const ANIM_SPEED = 24 / 60;
+const TRANSFORM_DURATION = 90; // 1.5s at 60fps
 
 export class Player {
   constructor(x, y, animations) {
@@ -19,40 +15,113 @@ export class Player {
     this.velocityY = 0;
     this.isGrounded = false;
 
-    // Animation data: { running: { frames, frameWidth, frameHeight }, jumping: { ... } }
-    this.animations = animations;
+    // Hero and robot animation sets
+    this.heroAnims = {
+      standing: animations.standing,
+      running: animations.running,
+      jumping: animations.jumping,
+      winning: animations.winning,
+    };
+    this.robotAnims = {
+      standing: animations.robotStanding,
+      running: animations.robotRunning,
+      jumping: animations.robotJumping,
+    };
+    this.transformAnim = animations.robotTransform;
+    this.transformBackAnim = animations.robotTransformBack;
+    this.robotDieAnim = animations.robotDie;
+    this.robotAttackAnim = animations.robotAttack;
+    this.attacking = false;
+
+    this.isRobot = false;
+    this.transforming = false;
+    this.transformTimer = 0;
+
+    // Active animation set (switches between hero/robot)
+    this.animations = this.heroAnims;
     this.state = 'standing';
-    this.animFrame = 0;
-    this.animTimer = 0;
     this.facingRight = true;
 
-    // Per-animation scale so each always renders at PLAYER_HEIGHT
-    this.scaleByAnim = {
-      standing: CONFIG.PLAYER_HEIGHT / animations.standing.frameHeight,
-      running: CONFIG.PLAYER_HEIGHT / animations.running.frameHeight,
-      jumping: (CONFIG.PLAYER_HEIGHT / animations.jumping.frameHeight) * 1.25,
-      winning: animations.winning
-        ? CONFIG.PLAYER_HEIGHT / animations.winning.frameHeight
-        : 0,
-    };
+    this._buildScales();
     this.currentScale = this.scaleByAnim.standing;
 
-    // Container acts as the display object (replaces the old Graphics)
     this.container = new Container();
 
-    // Animated sprite — anchor at bottom-center so feet align with collision box bottom
-    this.sprite = new Sprite(animations.standing.frames[0]);
+    this.sprite = new AnimatedSprite(this.animations.standing.frames);
     this.sprite.anchor.set(0.5, 1.0);
+    this.sprite.animationSpeed = ANIM_SPEED;
     this.sprite.scale.set(this.currentScale);
     this.sprite.position.set(this.width / 2, this.height + 5);
+    this.sprite.play();
     this.container.addChild(this.sprite);
 
     this.container.position.set(this.x, this.y);
   }
 
-  // Backward-compatible: main.js uses player.graphics
+  _buildScales() {
+    const anims = this.animations;
+    const mult = this.isRobot ? 1.2 : 1;
+    this.scaleByAnim = {
+      standing: (CONFIG.PLAYER_HEIGHT / anims.standing.frameHeight) * mult,
+      running: (CONFIG.PLAYER_HEIGHT / anims.running.frameHeight) * (this.isRobot ? 1.4 : 1),
+      jumping: (CONFIG.PLAYER_HEIGHT / anims.jumping.frameHeight) * (this.isRobot ? 1.3 : 1.25),
+    };
+    if (anims.winning) {
+      this.scaleByAnim.winning = CONFIG.PLAYER_HEIGHT / anims.winning.frameHeight;
+    }
+  }
+
   get graphics() {
     return this.container;
+  }
+
+  _switchAnimation(stateName) {
+    const anim = this.animations[stateName];
+    if (!anim) return;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = true;
+    this.sprite.play();
+    this.currentScale = this.scaleByAnim[stateName];
+  }
+
+  startTransform() {
+    if (this.transforming) return false;
+    this.transforming = true;
+    this.transformTimer = 0;
+    this.velocityX = 0;
+
+    const anim = this.isRobot ? this.transformBackAnim : this.transformAnim;
+    if (!anim) return false;
+
+    const scale = (CONFIG.PLAYER_HEIGHT / anim.frameHeight) * 1.25;
+    this.currentScale = scale;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = false;
+    this.sprite.play();
+    return true;
+  }
+
+  updateTransform(dt) {
+    this.transformTimer += dt;
+
+    this.sprite.scale.set(
+      this.currentScale * (this.facingRight ? 1 : -1),
+      this.currentScale
+    );
+    this.sprite.position.set(this.width / 2, this.height + 5);
+
+    if (this.transformTimer >= TRANSFORM_DURATION) {
+      this.transforming = false;
+      this.isRobot = !this.isRobot;
+      this.animations = this.isRobot ? this.robotAnims : this.heroAnims;
+      this._buildScales();
+      this.state = 'standing';
+      this._switchAnimation('standing');
+      return true; // transform complete
+    }
+    return false;
   }
 
   update(dt) {
@@ -91,26 +160,18 @@ export class Player {
 
     if (newState !== this.state) {
       this.state = newState;
-      this.animFrame = 0;
-      this.animTimer = 0;
+      this._switchAnimation(newState);
     }
 
-    // Advance animation
-    const anim = this.animations[this.state];
-    const ticksPerFrame = TICKS_PER_FRAME[this.state];
-    this.animTimer += dt;
-    while (this.animTimer >= ticksPerFrame) {
-      this.animTimer -= ticksPerFrame;
-      this.animFrame = (this.animFrame + 1) % anim.frames.length;
-    }
-    this.sprite.texture = anim.frames[this.animFrame];
-    this.currentScale = this.scaleByAnim[this.state];
-
-    // Flip sprite for facing direction (negative scaleX = mirror)
+    // Flip sprite for facing direction
     this.sprite.scale.set(
       this.currentScale * (this.facingRight ? 1 : -1),
       this.currentScale
     );
+
+    // Offset: robot running sits 5px lower
+    const yOffset = (this.isRobot && this.state === 'running') ? 10 : 5;
+    this.sprite.position.set(this.width / 2, this.height + yOffset);
 
     // Sync container position
     this.container.position.set(this.x, this.y);
@@ -118,27 +179,62 @@ export class Player {
 
   playCelebration() {
     this.state = 'winning';
-    this.animFrame = 0;
-    this.animTimer = 0;
+    const anim = this.animations.winning || this.heroAnims.winning;
+    if (!anim) return;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = true;
+    this.sprite.play();
+    this.currentScale = CONFIG.PLAYER_HEIGHT / anim.frameHeight;
   }
 
   updateCelebration(dt) {
-    const anim = this.animations.winning;
+    const anim = this.animations.winning || this.heroAnims.winning;
     if (!anim) return;
-
-    this.animTimer += dt;
-    const ticksPerFrame = TICKS_PER_FRAME.standing;
-    while (this.animTimer >= ticksPerFrame) {
-      this.animTimer -= ticksPerFrame;
-      this.animFrame = (this.animFrame + 1) % anim.frames.length;
-    }
-
-    const s = this.scaleByAnim.winning;
-    this.sprite.texture = anim.frames[this.animFrame];
+    const s = CONFIG.PLAYER_HEIGHT / anim.frameHeight;
     this.sprite.scale.set(
       s * (this.facingRight ? 1 : -1),
       s
     );
     this.sprite.position.set(this.width / 2, this.height + 10);
+  }
+
+  playDie() {
+    const anim = this.robotDieAnim;
+    if (!anim) return;
+    this.state = 'die';
+    this.currentScale = (CONFIG.PLAYER_HEIGHT / anim.frameHeight) * 1.25;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = false;
+    this.sprite.play();
+  }
+
+  updateDie(dt) {
+    this.sprite.scale.set(
+      this.currentScale * (this.facingRight ? 1 : -1),
+      this.currentScale
+    );
+    this.sprite.position.set(this.width / 2, this.height + 5);
+  }
+
+  startAttack() {
+    if (!this.isRobot || this.attacking) return false;
+    this.attacking = true;
+    const anim = this.robotAttackAnim;
+    if (!anim) return false;
+    this.state = 'attack';
+    this.currentScale = (CONFIG.PLAYER_HEIGHT / anim.frameHeight) * 1.25;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = false;
+    this.sprite.play();
+    this.sprite.onComplete = () => {
+      this.attacking = false;
+      this.state = 'standing';
+      this._switchAnimation('standing');
+      this.sprite.onComplete = null;
+    };
+    return true;
   }
 }

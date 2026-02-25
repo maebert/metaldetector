@@ -1,8 +1,8 @@
-import { Container, Sprite } from 'pixi.js';
+import { AnimatedSprite, Container } from 'pixi.js';
 import { CONFIG } from '../config.js';
 import { applyGravity, resolveCollisions } from '../systems/Physics.js';
 
-const TICKS_PER_FRAME = 60 / 24;
+const ANIM_SPEED = 24 / 60;
 const MAX_JUMP_HEIGHT = 50;
 const MAX_JUMP_DIST = 100;
 
@@ -20,11 +20,10 @@ export class Policeman {
     this.activateTimer = 0;
     this.activated = false;
     this.active = false;
+    this.shocked = false;
 
     this.animations = animations;
     this.currentState = 'running';
-    this.animFrame = 0;
-    this.animTimer = 0;
     this.facingRight = true;
 
     this.scaleByAnim = {
@@ -33,14 +32,19 @@ export class Policeman {
       arrest: animations.arrest
         ? (CONFIG.POLICEMAN_HEIGHT / animations.arrest.frameHeight) * 1.2
         : 0,
+      shock: animations.shock
+        ? (CONFIG.POLICEMAN_HEIGHT / animations.shock.frameHeight) * 1.25
+        : 0,
     };
 
     this.container = new Container();
 
-    this.sprite = new Sprite(animations.running.frames[0]);
+    this.sprite = new AnimatedSprite(animations.running.frames);
     this.sprite.anchor.set(0.5, 1.0);
+    this.sprite.animationSpeed = ANIM_SPEED;
     this.sprite.scale.set(this.scaleByAnim.running);
     this.sprite.position.set(this.width / 2, this.height + 5);
+    this.sprite.play();
     this.container.addChild(this.sprite);
 
     this.container.position.set(this.x, this.y);
@@ -56,8 +60,20 @@ export class Policeman {
     this.activateTimer = 0;
   }
 
+  _switchAnimation(stateName) {
+    const anim = this.animations[stateName];
+    if (!anim) return;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = true;
+    this.sprite.play();
+  }
+
   update(dt, platforms, player) {
-    // Wait for activation, then delay before appearing
+    if (this.shocked) {
+      this.updateShock(dt);
+      return;
+    }
     if (!this.activated) return;
     if (!this.active) {
       this.activateTimer += dt;
@@ -90,19 +106,10 @@ export class Policeman {
     const animKey = this.isGrounded ? 'running' : 'jumping';
     if (animKey !== this.currentState) {
       this.currentState = animKey;
-      this.animFrame = 0;
-      this.animTimer = 0;
-    }
-
-    const anim = this.animations[this.currentState];
-    this.animTimer += dt;
-    while (this.animTimer >= TICKS_PER_FRAME) {
-      this.animTimer -= TICKS_PER_FRAME;
-      this.animFrame = (this.animFrame + 1) % anim.frames.length;
+      this._switchAnimation(animKey);
     }
 
     const s = this.scaleByAnim[this.currentState];
-    this.sprite.texture = anim.frames[this.animFrame];
     this.sprite.scale.set(s * (this.facingRight ? 1 : -1), s);
 
     this.container.position.set(this.x, this.y);
@@ -114,22 +121,17 @@ export class Policeman {
     const onFloatingPlatform = this.groundedPlatform && this.groundedPlatform.y < CONFIG.GROUND_Y;
     const playerAboveGround = player.y + player.height < CONFIG.GROUND_Y - 5;
 
-    // Find nearest floating platform ahead within look-ahead distance
     const nearestAhead = this._findPlatformAhead(platforms, dir, CONFIG.POLICEMAN_LOOK_AHEAD);
 
-    // Scenario 1: On the ground, approaching a floating platform
     if (onGround && nearestAhead) {
-      // Platform blocks our path (vertically overlaps with us)
       if (nearestAhead.y < myFeetY && nearestAhead.y + nearestAhead.height > this.y) {
         return true;
       }
-      // Player is above ground — jump onto the platform to chase
       if (playerAboveGround) {
         return true;
       }
     }
 
-    // Scenario 2: On a floating platform, near the edge
     if (onFloatingPlatform) {
       const plat = this.groundedPlatform;
       const nearEdge = dir > 0
@@ -137,11 +139,9 @@ export class Policeman {
         : this.x <= (plat.x + 8);
 
       if (nearEdge) {
-        // Player is above ground and there's a reachable platform ahead — jump to it
         if (playerAboveGround && this._hasReachablePlatform(platforms, dir)) {
           return true;
         }
-        // Otherwise just fall to ground (don't jump)
       }
     }
 
@@ -153,7 +153,7 @@ export class Policeman {
     let nearestDist = Infinity;
 
     for (const plat of platforms) {
-      if (plat.y >= CONFIG.GROUND_Y) continue; // skip ground
+      if (plat.y >= CONFIG.GROUND_Y) continue;
 
       let dist;
       if (dir > 0) {
@@ -184,7 +184,6 @@ export class Policeman {
       }
 
       if (dist > 0 && dist < MAX_JUMP_DIST) {
-        // Platform top must be reachable (not more than MAX_JUMP_HEIGHT above us)
         if (plat.y >= this.y - MAX_JUMP_HEIGHT) {
           return true;
         }
@@ -196,24 +195,31 @@ export class Policeman {
 
   playArrest() {
     this.currentState = 'arrest';
-    this.animFrame = 0;
-    this.animTimer = 0;
+    const anim = this.animations.arrest;
+    if (!anim) return;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = false;
+    this.sprite.play();
   }
 
   updateArrest(dt) {
-    const anim = this.animations[this.currentState];
-    if (!anim) return;
-
-    this.animTimer += dt;
-    while (this.animTimer >= TICKS_PER_FRAME) {
-      this.animTimer -= TICKS_PER_FRAME;
-      if (this.animFrame < anim.frames.length - 1) {
-        this.animFrame++;
-      }
-    }
-
     const s = this.scaleByAnim[this.currentState] || this.scaleByAnim.running;
-    this.sprite.texture = anim.frames[this.animFrame];
+    this.sprite.scale.set(s * (this.facingRight ? 1 : -1), s);
+  }
+
+  playShock() {
+    this.currentState = 'shock';
+    const anim = this.animations.shock;
+    if (!anim) return;
+    this.sprite.textures = anim.frames;
+    this.sprite.animationSpeed = ANIM_SPEED;
+    this.sprite.loop = false;
+    this.sprite.play();
+  }
+
+  updateShock(dt) {
+    const s = this.scaleByAnim.shock || this.scaleByAnim.running;
     this.sprite.scale.set(s * (this.facingRight ? 1 : -1), s);
   }
 

@@ -1,6 +1,6 @@
 import { Application, Assets, Container, Text } from 'pixi.js';
 import { CONFIG } from './config.js';
-import { initInput, isPressed, isTap, isLeft, isRight, isJump, showTouchControls, hideTouchControls } from './input.js';
+import { initInput, isPressed, isTap, isLeft, isRight, isJump, isTransform, isAttack, showTouchControls, hideTouchControls, showAttackButton, hideAttackButton } from './input.js';
 import { Player } from './entities/Player.js';
 import { Policeman } from './entities/Policeman.js';
 import { generateLevel } from './level/LevelGenerator.js';
@@ -11,10 +11,11 @@ import { HUD } from './ui/HUD.js';
 import { GameOverScreen } from './ui/GameOverScreen.js';
 import { MenuScreen } from './ui/MenuScreen.js';
 import { extractFrames } from './SpriteAnimation.js';
+import { PaintBucket } from './entities/PaintBucket.js';
 
 import { Graphics } from 'pixi.js';
 
-const State = { MENU: 0, INTRO: 1, PLAYING: 2, ARREST: 3, CELEBRATION: 4, WIN: 5, LOSE: 6 };
+const State = { MENU: 0, INTRO: 1, PLAYING: 2, TRANSFORMING: 3, ARREST: 4, CELEBRATION: 5, WIN: 6, LOSE: 7 };
 const ARREST_DURATION = 90;
 const ARREST_ZOOM = 5;
 const CELEBRATION_DURATION = 90;
@@ -39,6 +40,8 @@ let collected;
 let playerAnimations;
 let policeAnimations;
 let metalAnimation;
+let paintBucketAnimation;
+let paintBucket;
 let arrestTimer;
 let celebrationTimer;
 let introTimer;
@@ -71,15 +74,24 @@ async function init() {
   initInput();
 
   // Preload sprite sheets
-  const [standingTex, runningTex, jumpingTex, winningTex, policeRunTex, policeJumpTex, policeArrestTex, metalTex, platformTex, iconTex, titleTex] = await Promise.all([
+  const [standingTex, runningTex, jumpingTex, winningTex, robotTransformTex, robotStandingTex, robotRunningTex, robotJumpingTex, robotDieTex, robotTransformBackTex, robotAttackTex, policeRunTex, policeJumpTex, policeArrestTex, policeShockTex, metalTex, paintBucketTex, platformTex, iconTex, titleTex] = await Promise.all([
     Assets.load('/assets/hero-standing.png'),
     Assets.load('/assets/hero-running.png'),
     Assets.load('/assets/hero-jumping.png'),
     Assets.load('/assets/hero-winning.png'),
+    Assets.load('/assets/robot-transform.png'),
+    Assets.load('/assets/robot-standing.png'),
+    Assets.load('/assets/robot-running.png'),
+    Assets.load('/assets/robot-jumping.png'),
+    Assets.load('/assets/robot-die.png'),
+    Assets.load('/assets/robot-transform-back.png'),
+    Assets.load('/assets/robot-attack.png'),
     Assets.load('/assets/police-running.png'),
     Assets.load('/assets/police-jumping.png'),
     Assets.load('/assets/police-arrest.png'),
+    Assets.load('/assets/police-shock.png'),
     Assets.load('/assets/metal-spinning.png'),
+    Assets.load('/assets/paint-bucket.png'),
     Assets.load('/assets/platform.png'),
     Assets.load('/assets/icon.png'),
     Assets.load('/assets/title.png'),
@@ -91,13 +103,22 @@ async function init() {
     running: extractFrames(runningTex, 6, 6, 36),
     jumping: extractFrames(jumpingTex, 5, 5, 25),
     winning: extractFrames(winningTex, 6, 6, 36),
+    robotTransform: extractFrames(robotTransformTex, 6, 6, 36),
+    robotStanding: extractFrames(robotStandingTex, 6, 6, 36),
+    robotRunning: extractFrames(robotRunningTex, 5, 5, 25),
+    robotJumping: extractFrames(robotJumpingTex, 4, 4, 16),
+    robotDie: extractFrames(robotDieTex, 6, 6, 36),
+    robotTransformBack: extractFrames(robotTransformBackTex, 6, 6, 36),
+    robotAttack: extractFrames(robotAttackTex, 6, 6, 36),
   };
   policeAnimations = {
     running: extractFrames(policeRunTex, 6, 6, 36),
     jumping: extractFrames(policeJumpTex, 4, 4, 16),
     arrest: extractFrames(policeArrestTex, 6, 6, 36),
+    shock: extractFrames(policeShockTex, 5, 5, 25),
   };
   metalAnimation = extractFrames(metalTex, 6, 6, 36);
+  paintBucketAnimation = extractFrames(paintBucketTex, 4, 4, 16);
 
   // Persistent UI elements
   hud = new HUD();
@@ -143,6 +164,9 @@ async function init() {
       case State.PLAYING:
         updatePlaying(dt);
         break;
+      case State.TRANSFORMING:
+        updateTransforming(dt);
+        break;
       case State.ARREST:
         updateArrest(dt);
         break;
@@ -178,16 +202,19 @@ function startGame() {
 
   // Create world container
   worldContainer = new Container();
+  worldContainer.interactiveChildren = false;
   app.stage.addChild(worldContainer);
 
   // Generate level
-  const level = generateLevel(worldContainer, metalAnimation);
+  const level = generateLevel(worldContainer, metalAnimation, paintBucketAnimation);
   platforms = level.platforms;
   metalPieces = level.metalPieces;
 
   // Create player at start position
   player = new Player(level.startPosition.x, level.startPosition.y, playerAnimations);
   worldContainer.addChild(player.graphics);
+
+  paintBucket = level.paintBucket;
 
   // Create policeman at same start position (hidden until player moves)
   policeman = new Policeman(level.startPosition.x, level.startPosition.y, policeAnimations);
@@ -267,8 +294,46 @@ function updateIntro(dt) {
 }
 
 function updatePlaying(dt) {
-  // Player movement + physics
-  player.update(dt);
+  // Transform trigger (E key)
+  if (isTransform() && player.isGrounded && !player.transforming) {
+    if (player.startTransform()) {
+      state = State.TRANSFORMING;
+      return;
+    }
+  }
+
+  // Attack trigger (R key, robot only)
+  if (isAttack() && player.isRobot && !player.attacking) {
+    if (player.startAttack()) {
+      // Shock policeman if active on screen
+      if (policeman.active) {
+        policeman.playShock();
+        policeman.shocked = true;
+      }
+    }
+  }
+
+  // When attack finishes and policeman was shocked, freeze them in place
+  if (policeman.shocked && !player.attacking) {
+    policeman.shocked = false;
+    policeman.activated = false;
+    policeman.active = false;
+    // Stay visible but frozen — will reactivate when player moves
+    policeman.activateTimer = -60; // extra 1s head start
+    playerHasMoved = false;
+  }
+
+  // Player movement + physics (skip movement during attack)
+  if (!player.attacking) {
+    player.update(dt);
+  } else {
+    // Still apply scale/position during attack
+    player.sprite.scale.set(
+      player.currentScale * (player.facingRight ? 1 : -1),
+      player.currentScale
+    );
+    player.sprite.position.set(player.width / 2, player.height + 5);
+  }
   applyGravity(player, dt);
   resolveCollisions(player, platforms);
   player.graphics.position.set(player.x, player.y);
@@ -294,6 +359,11 @@ function updatePlaying(dt) {
     const prevY = policeman.groundedPlatform.y;
     policeman.groundedPlatform.sink(dt);
     policeman.y += policeman.groundedPlatform.y - prevY;
+  }
+
+  // Paint bucket trigger
+  if (paintBucket && !paintBucket.triggered && checkOverlap(player, paintBucket)) {
+    paintBucket.trigger();
   }
 
   // Metal piece collection
@@ -328,19 +398,67 @@ function updatePlaying(dt) {
   camera.update(player, worldContainer, dt);
 }
 
+function updateTransforming(dt) {
+  // Keep physics running (gravity, platform sinking)
+  applyGravity(player, dt);
+  resolveCollisions(player, platforms);
+  player.graphics.position.set(player.x, player.y);
+
+  if (player.groundedPlatform) {
+    const prevY = player.groundedPlatform.y;
+    player.groundedPlatform.sink(dt);
+    player.y += player.groundedPlatform.y - prevY;
+  }
+
+  const done = player.updateTransform(dt);
+  camera.update(player, worldContainer, dt);
+
+  if (done) {
+    // Pause policeman until player moves again
+    policeman.activated = false;
+    policeman.active = false;
+    policeman.container.visible = false;
+    playerHasMoved = false;
+    // Show/hide attack button based on new form
+    if (player.isRobot) showAttackButton();
+    else hideAttackButton();
+    state = State.PLAYING;
+  }
+}
+
+let celebrationPhase; // 'detransform' | 'celebrate'
+
 function startCelebration() {
   state = State.CELEBRATION;
   celebrationTimer = 0;
   player.velocityX = 0;
+
+  // If robot, need to transform back first
+  if (player.isRobot) {
+    celebrationPhase = 'detransform';
+    player.startTransform(); // plays transform-back animation
+  } else {
+    celebrationPhase = 'celebrate';
+  }
 }
 
 function updateCelebration(dt) {
   if (!player.isGrounded) {
-    // Keep falling until we land
     applyGravity(player, dt);
     resolveCollisions(player, platforms);
     player.graphics.position.set(player.x, player.y);
     camera.update(player, worldContainer, dt);
+    return;
+  }
+
+  if (celebrationPhase === 'detransform') {
+    const done = player.updateTransform(dt);
+    player.graphics.position.set(player.x, player.y);
+    camera.update(player, worldContainer, dt);
+    if (done) {
+      celebrationPhase = 'celebrate';
+      celebrationTimer = 0;
+    }
     return;
   }
 
@@ -366,6 +484,12 @@ function startArrest() {
   state = State.ARREST;
   arrestTimer = 0;
   player.velocityX = 0;
+  if (player.isRobot) {
+    player.playDie();
+  } else {
+    player.state = 'standing';
+    player._switchAnimation('standing');
+  }
   policeman.velocityX = 0;
 }
 
@@ -396,6 +520,10 @@ function updateArrest(dt) {
 
   arrestTimer += dt;
 
+  if (player.isRobot) {
+    player.updateDie(dt);
+    player.graphics.position.set(player.x, player.y);
+  }
   policeman.updateArrest(dt);
 
   camera.update(player, worldContainer, dt);
